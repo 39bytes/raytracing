@@ -89,6 +89,21 @@ impl Vec3 {
         let threshold = 1e-8;
         self.0.abs() < threshold && self.1.abs() < threshold && self.2.abs() < threshold
     }
+
+    pub fn reflect(v: Vec3, norm: Vec3) -> Vec3 {
+        v - 2.0 * v.dot(norm) * norm
+    }
+
+    pub fn refract(v: Vec3, norm: Vec3, refraction_ratio: f64) -> Vec3 {
+        let v = v.normalized();
+
+        let cos = f64::min((-v).dot(norm), 1.0);
+
+        let perp = refraction_ratio * (v + cos * norm);
+        let parallel = -(1.0 - perp.magnitude_squared()).sqrt() * norm;
+
+        perp + parallel
+    }
 }
 
 impl ops::Neg for Vec3 {

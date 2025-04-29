@@ -50,7 +50,7 @@ impl Metal {
 
 impl Material for Metal {
     fn scatter(&self, ray: &Ray, hit: &Hit) -> Option<Scatter> {
-        let reflected = reflect(ray.direction(), hit.normal());
+        let reflected = Vec3::reflect(ray.direction(), hit.normal());
         let reflected = reflected.normalized() + (self.fuzz * Vec3::random_unit());
         let ray = Ray::new(hit.point(), reflected);
 
@@ -65,6 +65,30 @@ impl Material for Metal {
     }
 }
 
-pub fn reflect(v: Vec3, norm: Vec3) -> Vec3 {
-    v - 2.0 * v.dot(norm) * norm
+pub struct Dielectric {
+    refraction_index: f64,
+}
+
+impl Dielectric {
+    pub fn new(refraction_index: f64) -> Self {
+        Dielectric { refraction_index }
+    }
+}
+
+impl Material for Dielectric {
+    fn scatter(&self, ray: &Ray, hit: &Hit) -> Option<Scatter> {
+        let attenuation = Color::WHITE;
+        let refraction_ratio = if hit.front_face() {
+            1.0 / self.refraction_index
+        } else {
+            self.refraction_index
+        };
+
+        let refracted = Vec3::refract(ray.direction(), hit.normal(), refraction_ratio);
+
+        Some(Scatter {
+            ray: Ray::new(hit.point(), refracted),
+            attenuation,
+        })
+    }
 }
