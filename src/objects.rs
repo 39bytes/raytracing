@@ -1,19 +1,27 @@
+use std::rc::Rc;
+
 use crate::{
     linalg::{Interval, Vec3},
+    material::Material,
     ray::{Hit, HitObject, Ray},
 };
 
 pub struct Sphere {
-    pub position: Vec3,
-    pub radius: f64,
+    position: Vec3,
+    radius: f64,
+    material: Rc<dyn Material>,
 }
 
 impl Sphere {
-    pub fn new(position: Vec3, radius: f64) -> Self {
-        Sphere { position, radius }
+    pub fn new(position: Vec3, radius: f64, material: Rc<dyn Material>) -> Self {
+        Sphere {
+            position,
+            radius,
+            material,
+        }
     }
 
-    pub fn origin(&self) -> Vec3 {
+    pub fn position(&self) -> Vec3 {
         self.position
     }
 
@@ -24,7 +32,6 @@ impl Sphere {
 
 impl HitObject for Sphere {
     fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<Hit> {
-        // ray origin to sphere origin
         let cq = self.position - ray.origin();
         let d = ray.direction();
 
@@ -42,9 +49,9 @@ impl HitObject for Sphere {
         let root1 = (h - sqrt) / a;
         let root2 = (h + sqrt) / a;
 
-        let root = if ray_t.contains(root1) {
+        let root = if ray_t.surrounds(root1) {
             root1
-        } else if ray_t.contains(root2) {
+        } else if ray_t.surrounds(root2) {
             root2
         } else {
             return None;
@@ -53,7 +60,7 @@ impl HitObject for Sphere {
         let point = ray.at(root);
         let normal = (point - self.position) / self.radius;
 
-        Some(Hit::new(root, point, ray, normal))
+        Some(Hit::new(root, point, ray, normal, self.material.clone()))
     }
 }
 

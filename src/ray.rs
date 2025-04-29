@@ -1,5 +1,11 @@
-use crate::linalg::{Interval, Vec3};
+use std::rc::Rc;
 
+use crate::{
+    linalg::{Interval, Vec3},
+    material::Material,
+};
+
+#[derive(Debug)]
 pub struct Ray {
     origin: Vec3,
     direction: Vec3,
@@ -27,11 +33,18 @@ pub struct Hit {
     point: Vec3,
     normal: Vec3,
     t: f64,
+    material: Rc<dyn Material>,
     front_face: bool,
 }
 
 impl Hit {
-    pub fn new(t: f64, point: Vec3, ray: &Ray, outward_normal: Vec3) -> Self {
+    pub fn new(
+        t: f64,
+        point: Vec3,
+        ray: &Ray,
+        outward_normal: Vec3,
+        material: Rc<dyn Material>,
+    ) -> Self {
         let front_face = ray.direction.dot(outward_normal) < 0.0;
         let normal = if front_face {
             outward_normal
@@ -44,6 +57,7 @@ impl Hit {
             point,
             normal,
             front_face,
+            material,
         }
     }
 
@@ -61,6 +75,10 @@ impl Hit {
 
     pub fn front_face(&self) -> bool {
         self.front_face
+    }
+
+    pub fn material(&self) -> Rc<dyn Material> {
+        self.material.clone()
     }
 }
 

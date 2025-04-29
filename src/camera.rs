@@ -1,9 +1,8 @@
 use crate::{
+    color::Color,
     linalg::{Interval, Vec3},
     ray::{HitObject, Ray},
 };
-
-type Color = Vec3;
 
 pub struct Camera {
     image_width: usize,
@@ -13,10 +12,18 @@ pub struct Camera {
     top_left_pixel: Vec3,
     pixel_step_u: Vec3,
     pixel_step_v: Vec3,
+    samples_per_pixel: u32,
+    pixel_sample_scale: f64,
+    max_bounces: u32,
 }
 
 impl Camera {
-    pub fn new(aspect_ratio: f64, image_width: usize) -> Self {
+    pub fn new(
+        aspect_ratio: f64,
+        image_width: usize,
+        samples_per_pixel: u32,
+        max_bounces: u32,
+    ) -> Self {
         let image_height = (image_width as f64 / aspect_ratio).max(1.0) as usize;
 
         let focal_length = 1.0;
@@ -42,6 +49,9 @@ impl Camera {
             top_left_pixel,
             pixel_step_u,
             pixel_step_v,
+            samples_per_pixel,
+            pixel_sample_scale: 1.0 / (samples_per_pixel as f64),
+            max_bounces,
         }
     }
 
@@ -49,33 +59,50 @@ impl Camera {
         println!("P3\n{} {}\n255", self.image_width, self.image_height);
         for j in 0..self.image_height {
             for i in 0..self.image_width {
-                let pixel = self.top_left_pixel
-                    + (i as f64 * self.pixel_step_u)
-                    + (j as f64 * self.pixel_step_v);
-                let ray_dir = pixel - self.position;
-                let ray = Ray::new(self.position, ray_dir);
-
-                output_pixel(self.ray_color(&ray, world));
+                let mut color = Color::BLACK;
+                for _ in 0..self.samples_per_pixel {
+                    color += self.ray_color(&self.get_ray(i, j), world, 0);
+                }
+                output_pixel(color * self.pixel_sample_scale);
             }
         }
     }
 
-    fn ray_color(&self, ray: &Ray, world: &impl HitObject) -> Color {
-        if let Some(hit) = world.hit(ray, Interval::new(0.0, 10.0)) {
-            let norm = hit.normal();
-            return 0.5 * Color::new(norm.x() + 1.0, norm.y() + 1.0, norm.z() + 1.0);
+    fn ray_color(&self, ray: &Ray, world: &impl HitObject, bounces: u32) -> Color {
+        if bounces >= self.max_bounces {
+            return Color::BLACK;
+        }
+
+        if let Some(hit) = world.hit(ray, Interval::new(0.001, f64::INFINITY)) {
+            if let Some(scatter) = hit.material().scatter(&ray, &hit) {
+                return scatter.attenuation * self.ray_color(&scatter.ray, world, bounces + 1);
+            }
         }
 
         let dir = ray.direction().normalized();
         let a = 0.5 * (dir.y() + 1.0);
         (1.0 - a) * Color::new(1.0, 1.0, 1.0) + a * Color::new(0.5, 0.7, 1.0)
     }
+
+    fn get_ray(&self, i: usize, j: usize) -> Ray {
+        let offset = self.sample_square();
+        let pixel_sample = self.top_left_pixel
+            + ((i as f64 + offset.x()) * self.pixel_step_u)
+            + ((j as f64 + offset.y()) * self.pixel_step_v);
+
+        Ray::new(self.position, pixel_sample - self.position)
+    }
+
+    fn sample_square(&self) -> Vec3 {
+        Vec3::new(
+            rand::random::<f64>() - 0.5,
+            rand::random::<f64>() - 0.5,
+            0.0,
+        )
+    }
 }
 
 fn output_pixel(color: Color) {
-    let ir = 255.999f64 * color.x();
-    let ig = 255.999f64 * color.y();
-    let ib = 255.999f64 * color.z();
-
-    println!("{} {} {}", ir.floor(), ig.floor(), ib.floor());
+    let (r, g, b) = color.gamma_transform().to_bytes();
+    println!("{r} {g} {b}");
 }

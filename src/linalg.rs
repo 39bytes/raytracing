@@ -22,6 +22,33 @@ impl Vec3 {
         Vec3(0.0, 0.0, z)
     }
 
+    pub fn random() -> Self {
+        Vec3::new(rand::random(), rand::random(), rand::random())
+    }
+
+    pub fn random_range(min: f64, max: f64) -> Self {
+        Vec3::new(
+            rand::random_range(min..max),
+            rand::random_range(min..max),
+            rand::random_range(min..max),
+        )
+    }
+
+    pub fn random_unit() -> Self {
+        loop {
+            let p = Vec3::random();
+            let mag_sq = p.magnitude_squared();
+            if 1e-160 < mag_sq && mag_sq <= 1.0 {
+                return p / mag_sq.sqrt();
+            }
+        }
+    }
+
+    pub fn random_on_hemisphere(norm: Vec3) -> Self {
+        let unit = Vec3::random_unit();
+        if unit.dot(norm) > 0.0 { unit } else { -unit }
+    }
+
     pub fn x(&self) -> f64 {
         self.0
     }
@@ -56,6 +83,11 @@ impl Vec3 {
 
     pub fn normalized(&self) -> Self {
         *self / self.magnitude()
+    }
+
+    pub fn near_zero(&self) -> bool {
+        let threshold = 1e-8;
+        self.0.abs() < threshold && self.1.abs() < threshold && self.2.abs() < threshold
     }
 }
 
@@ -139,7 +171,7 @@ impl ops::DivAssign<f64> for Vec3 {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Interval {
     pub min: f64,
     pub max: f64,
@@ -170,5 +202,9 @@ impl Interval {
 
     pub fn surrounds(&self, x: f64) -> bool {
         self.min < x && x < self.max
+    }
+
+    pub fn clamp(&self, x: f64) -> f64 {
+        x.clamp(self.min, self.max)
     }
 }
