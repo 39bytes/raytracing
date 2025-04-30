@@ -1,8 +1,12 @@
+use log::info;
+
 use crate::{
     color::Color,
     linalg::{Interval, Vec3},
     ray::{HitObject, Ray},
 };
+use std::io::BufWriter;
+use std::{fs::File, io::Write};
 
 pub struct Camera {
     image_width: usize,
@@ -20,11 +24,13 @@ pub struct Camera {
 }
 
 impl Camera {
+    const IMAGE_PATH: &str = "image.ppm";
+
     const ASPECT_RATIO: f64 = 16.0 / 9.0;
     const FOV: f64 = 20.0;
-    const SAMPLES_PER_PIXEL: u32 = 100;
+    const SAMPLES_PER_PIXEL: u32 = 500;
     const MAX_BOUNCES: u32 = 50;
-    const DEFOCUS_ANGLE: f64 = 0.1;
+    const DEFOCUS_ANGLE: f64 = 0.0;
     const FOCUS_DIST: f64 = 10.0;
 
     pub fn new(camera_position: Vec3, look_at: Vec3, up: Vec3, image_width: usize) -> Self {
@@ -41,7 +47,7 @@ impl Camera {
 
         let w = (camera_position - look_at).normalized();
         let u = up.cross(w).normalized();
-        let v = w.cross(u).normalized();
+        let v = w.cross(u);
 
         let viewport_u = viewport_width * u;
         let viewport_v = viewport_height * -v;
@@ -52,7 +58,8 @@ impl Camera {
             camera_position - (focus_dist * w) - (viewport_u / 2.0) - (viewport_v / 2.0);
         let top_left_pixel = viewport_upper_left + 0.5 * (pixel_step_u + pixel_step_v);
 
-        let defocus_radius = focus_dist * f64::tan((defocus_angle / 2.0).to_radians());
+        let defocus_radius = focus_dist * f64::tan(defocus_angle.to_radians() / 2.0);
+        info!("defocus radius: {}", defocus_radius);
         let defocus_disk_u = u * defocus_radius;
         let defocus_disk_v = v * defocus_radius;
 
@@ -71,14 +78,23 @@ impl Camera {
     }
 
     pub fn render(&self, world: &impl HitObject) {
-        println!("P3\n{} {}\n255", self.image_width, self.image_height);
+        let f = File::create(Self::IMAGE_PATH).expect("Couldn't create image file");
+        let mut f = BufWriter::new(f);
+
+        f.write_all(format!("P3\n{} {}\n255\n", self.image_width, self.image_height).as_bytes())
+            .expect("Failed to write header");
         for j in 0..self.image_height {
             for i in 0..self.image_width {
                 let mut color = Color::BLACK;
                 for _ in 0..Self::SAMPLES_PER_PIXEL {
                     color += self.ray_color(&self.get_ray(i, j), world, 0);
                 }
-                output_pixel(color * self.pixel_sample_scale);
+
+                let (r, g, b) = (color * self.pixel_sample_scale)
+                    .gamma_transform()
+                    .to_bytes();
+                f.write_all(format!("{r} {g} {b}\n").as_bytes())
+                    .expect("failed to write pixel");
             }
         }
     }
@@ -127,9 +143,4 @@ impl Camera {
             0.0,
         )
     }
-}
-
-fn output_pixel(color: Color) {
-    let (r, g, b) = color.gamma_transform().to_bytes();
-    println!("{r} {g} {b}");
 }

@@ -1,2 +1,2 @@
 render:
-    cargo run --release > image.ppm
+    cargo run --release
