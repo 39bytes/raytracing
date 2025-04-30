@@ -1,4 +1,5 @@
 use log::info;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use crate::{
     color::Color,
@@ -77,14 +78,21 @@ impl Camera {
         }
     }
 
-    pub fn render(&self, world: &impl HitObject) {
+    pub fn render<H>(&self, world: &H)
+    where
+        H: HitObject + Send + Sync,
+    {
         let f = File::create(Self::IMAGE_PATH).expect("Couldn't create image file");
         let mut f = BufWriter::new(f);
 
         f.write_all(format!("P3\n{} {}\n255\n", self.image_width, self.image_height).as_bytes())
             .expect("Failed to write header");
-        for j in 0..self.image_height {
-            for i in 0..self.image_width {
+
+        let buf: Vec<u8> = (0..(self.image_height * self.image_width))
+            .into_par_iter()
+            .flat_map(|idx| {
+                let j = idx / self.image_width;
+                let i = idx % self.image_width;
                 let mut color = Color::BLACK;
                 for _ in 0..Self::SAMPLES_PER_PIXEL {
                     color += self.ray_color(&self.get_ray(i, j), world, 0);
@@ -93,10 +101,12 @@ impl Camera {
                 let (r, g, b) = (color * self.pixel_sample_scale)
                     .gamma_transform()
                     .to_bytes();
-                f.write_all(format!("{r} {g} {b}\n").as_bytes())
-                    .expect("failed to write pixel");
-            }
-        }
+
+                format!("{r} {g} {b}\n").as_bytes().to_vec()
+            })
+            .collect();
+
+        f.write_all(&buf).expect("failed to write pixel");
     }
 
     fn ray_color(&self, ray: &Ray, world: &impl HitObject, bounces: u32) -> Color {

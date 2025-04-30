@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::{
     linalg::{Interval, Vec3},
@@ -9,11 +9,11 @@ use crate::{
 pub struct Sphere {
     position: Vec3,
     radius: f64,
-    material: Rc<dyn Material>,
+    material: Arc<dyn Material + Send + Sync>,
 }
 
 impl Sphere {
-    pub fn new(position: Vec3, radius: f64, material: Rc<dyn Material>) -> Self {
+    pub fn new(position: Vec3, radius: f64, material: Arc<dyn Material + Send + Sync>) -> Self {
         Sphere {
             position,
             radius,
@@ -65,7 +65,7 @@ impl HitObject for Sphere {
 }
 
 pub struct ObjectGroup {
-    objects: Vec<Box<dyn HitObject>>,
+    objects: Vec<Box<dyn HitObject + Send + Sync>>,
 }
 
 impl ObjectGroup {
@@ -75,7 +75,7 @@ impl ObjectGroup {
         }
     }
 
-    pub fn add(&mut self, obj: Box<dyn HitObject>) {
+    pub fn add(&mut self, obj: Box<dyn HitObject + Send + Sync>) {
         self.objects.push(obj);
     }
 

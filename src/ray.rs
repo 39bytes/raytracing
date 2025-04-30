@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::{
     linalg::{Interval, Vec3},
@@ -33,7 +33,7 @@ pub struct Hit {
     point: Vec3,
     normal: Vec3,
     t: f64,
-    material: Rc<dyn Material>,
+    material: Arc<dyn Material + Send + Sync>,
     front_face: bool,
 }
 
@@ -43,7 +43,7 @@ impl Hit {
         point: Vec3,
         ray: &Ray,
         outward_normal: Vec3,
-        material: Rc<dyn Material>,
+        material: Arc<dyn Material + Send + Sync>,
     ) -> Self {
         let front_face = ray.direction.dot(outward_normal) < 0.0;
         let normal = if front_face {
@@ -77,7 +77,7 @@ impl Hit {
         self.front_face
     }
 
-    pub fn material(&self) -> Rc<dyn Material> {
+    pub fn material(&self) -> Arc<dyn Material + Send + Sync> {
         self.material.clone()
     }
 }
