@@ -6,40 +6,42 @@ use crate::{
 
 pub struct Camera {
     image_width: usize,
-
     image_height: usize,
+
     position: Vec3,
     top_left_pixel: Vec3,
     pixel_step_u: Vec3,
     pixel_step_v: Vec3,
     pixel_sample_scale: f64,
+
+    defocus_angle: f64,
+    defocus_disk_u: Vec3,
+    defocus_disk_v: Vec3,
 }
 
 impl Camera {
-    const FOV: f64 = 90.0;
-    const SAMPLES_PER_PIXEL: u32 = 10;
+    const ASPECT_RATIO: f64 = 16.0 / 9.0;
+    const FOV: f64 = 20.0;
+    const SAMPLES_PER_PIXEL: u32 = 100;
     const MAX_BOUNCES: u32 = 50;
+    const DEFOCUS_ANGLE: f64 = 0.1;
+    const FOCUS_DIST: f64 = 10.0;
 
-    pub fn new(
-        camera_position: Vec3,
-        look_at: Vec3,
-        up: Vec3,
-        aspect_ratio: f64,
-        image_width: usize,
-    ) -> Self {
-        let image_height = (image_width as f64 / aspect_ratio).max(1.0) as usize;
-
-        let focal_length = (camera_position - look_at).magnitude();
+    pub fn new(camera_position: Vec3, look_at: Vec3, up: Vec3, image_width: usize) -> Self {
+        let image_height = (image_width as f64 / Self::ASPECT_RATIO).max(1.0) as usize;
 
         let theta = Self::FOV.to_radians();
         let h = f64::tan(theta / 2.0);
 
-        let viewport_height = 2.0 * h * focal_length;
+        let defocus_angle = Self::DEFOCUS_ANGLE;
+        let focus_dist = Self::FOCUS_DIST;
+
+        let viewport_height = 2.0 * h * focus_dist;
         let viewport_width = viewport_height * (image_width as f64 / image_height as f64);
 
         let w = (camera_position - look_at).normalized();
         let u = up.cross(w).normalized();
-        let v = w.cross(u);
+        let v = w.cross(u).normalized();
 
         let viewport_u = viewport_width * u;
         let viewport_v = viewport_height * -v;
@@ -47,8 +49,12 @@ impl Camera {
         let pixel_step_v = viewport_v / image_height as f64;
 
         let viewport_upper_left =
-            camera_position - (focal_length * w) - (viewport_u / 2.0) - (viewport_v / 2.0);
+            camera_position - (focus_dist * w) - (viewport_u / 2.0) - (viewport_v / 2.0);
         let top_left_pixel = viewport_upper_left + 0.5 * (pixel_step_u + pixel_step_v);
+
+        let defocus_radius = focus_dist * f64::tan((defocus_angle / 2.0).to_radians());
+        let defocus_disk_u = u * defocus_radius;
+        let defocus_disk_v = v * defocus_radius;
 
         Camera {
             image_width,
@@ -58,6 +64,9 @@ impl Camera {
             pixel_step_u,
             pixel_step_v,
             pixel_sample_scale: 1.0 / (Self::SAMPLES_PER_PIXEL as f64),
+            defocus_angle,
+            defocus_disk_u,
+            defocus_disk_v,
         }
     }
 
@@ -96,7 +105,19 @@ impl Camera {
             + ((i as f64 + offset.x()) * self.pixel_step_u)
             + ((j as f64 + offset.y()) * self.pixel_step_v);
 
-        Ray::new(self.position, pixel_sample - self.position)
+        let origin = if self.defocus_angle <= 0.0 {
+            self.position
+        } else {
+            self.sample_defocus_disk()
+        };
+        let dir = pixel_sample - self.position;
+
+        Ray::new(origin, dir)
+    }
+
+    fn sample_defocus_disk(&self) -> Vec3 {
+        let p = Vec3::random_in_unit_disk();
+        self.position + (p.x() * self.defocus_disk_u) + (p.y() * self.defocus_disk_v)
     }
 
     fn sample_square(&self) -> Vec3 {

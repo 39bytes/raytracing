@@ -26,6 +26,18 @@ impl Color {
         Color { r, g, b }
     }
 
+    pub fn random() -> Color {
+        Color::new(rand::random(), rand::random(), rand::random())
+    }
+
+    pub fn random_range(min: f64, max: f64) -> Color {
+        Color::new(
+            rand::random_range(min..max),
+            rand::random_range(min..max),
+            rand::random_range(min..max),
+        )
+    }
+
     pub fn gamma_transform(&self) -> Self {
         Color::new(
             gamma_transform(self.r),
