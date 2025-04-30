@@ -12,34 +12,42 @@ pub struct Camera {
     top_left_pixel: Vec3,
     pixel_step_u: Vec3,
     pixel_step_v: Vec3,
-    samples_per_pixel: u32,
     pixel_sample_scale: f64,
-    max_bounces: u32,
 }
 
 impl Camera {
+    const FOV: f64 = 90.0;
+    const SAMPLES_PER_PIXEL: u32 = 10;
+    const MAX_BOUNCES: u32 = 50;
+
     pub fn new(
+        camera_position: Vec3,
+        look_at: Vec3,
+        up: Vec3,
         aspect_ratio: f64,
         image_width: usize,
-        samples_per_pixel: u32,
-        max_bounces: u32,
     ) -> Self {
         let image_height = (image_width as f64 / aspect_ratio).max(1.0) as usize;
 
-        let focal_length = 1.0;
-        let viewport_height = 2.0;
-        let viewport_width = viewport_height * (image_width as f64 / image_height as f64);
-        let camera_position = Vec3::ZERO;
+        let focal_length = (camera_position - look_at).magnitude();
 
-        let viewport_u = Vec3::new(viewport_width, 0.0, 0.0);
-        let viewport_v = Vec3::new(0.0, -viewport_height, 0.0);
+        let theta = Self::FOV.to_radians();
+        let h = f64::tan(theta / 2.0);
+
+        let viewport_height = 2.0 * h * focal_length;
+        let viewport_width = viewport_height * (image_width as f64 / image_height as f64);
+
+        let w = (camera_position - look_at).normalized();
+        let u = up.cross(w).normalized();
+        let v = w.cross(u);
+
+        let viewport_u = viewport_width * u;
+        let viewport_v = viewport_height * -v;
         let pixel_step_u = viewport_u / image_width as f64;
         let pixel_step_v = viewport_v / image_height as f64;
 
-        let viewport_upper_left = camera_position
-            - Vec3::new(0.0, 0.0, focal_length)
-            - viewport_u / 2.0
-            - viewport_v / 2.0;
+        let viewport_upper_left =
+            camera_position - (focal_length * w) - (viewport_u / 2.0) - (viewport_v / 2.0);
         let top_left_pixel = viewport_upper_left + 0.5 * (pixel_step_u + pixel_step_v);
 
         Camera {
@@ -49,9 +57,7 @@ impl Camera {
             top_left_pixel,
             pixel_step_u,
             pixel_step_v,
-            samples_per_pixel,
-            pixel_sample_scale: 1.0 / (samples_per_pixel as f64),
-            max_bounces,
+            pixel_sample_scale: 1.0 / (Self::SAMPLES_PER_PIXEL as f64),
         }
     }
 
@@ -60,7 +66,7 @@ impl Camera {
         for j in 0..self.image_height {
             for i in 0..self.image_width {
                 let mut color = Color::BLACK;
-                for _ in 0..self.samples_per_pixel {
+                for _ in 0..Self::SAMPLES_PER_PIXEL {
                     color += self.ray_color(&self.get_ray(i, j), world, 0);
                 }
                 output_pixel(color * self.pixel_sample_scale);
@@ -69,12 +75,12 @@ impl Camera {
     }
 
     fn ray_color(&self, ray: &Ray, world: &impl HitObject, bounces: u32) -> Color {
-        if bounces >= self.max_bounces {
+        if bounces >= Self::MAX_BOUNCES {
             return Color::BLACK;
         }
 
         if let Some(hit) = world.hit(ray, Interval::new(0.001, f64::INFINITY)) {
-            if let Some(scatter) = hit.material().scatter(&ray, &hit) {
+            if let Some(scatter) = hit.material().scatter(ray, &hit) {
                 return scatter.attenuation * self.ray_color(&scatter.ray, world, bounces + 1);
             }
         }

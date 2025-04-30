@@ -95,8 +95,6 @@ impl Vec3 {
     }
 
     pub fn refract(v: Vec3, norm: Vec3, refraction_ratio: f64) -> Vec3 {
-        let v = v.normalized();
-
         let cos = f64::min((-v).dot(norm), 1.0);
 
         let perp = refraction_ratio * (v + cos * norm);

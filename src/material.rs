@@ -43,7 +43,7 @@ impl Metal {
     pub fn new(albedo: Color, fuzz: f64) -> Self {
         Metal {
             albedo,
-            fuzz: f64::max(fuzz, 1.0),
+            fuzz: f64::min(fuzz, 1.0),
         }
     }
 }
@@ -73,21 +73,37 @@ impl Dielectric {
     pub fn new(refraction_index: f64) -> Self {
         Dielectric { refraction_index }
     }
+
+    fn reflectance(cos: f64, refraction_index: f64) -> f64 {
+        let r0 = (1.0 - refraction_index) / (1.0 + refraction_index);
+        let r0 = r0 * r0;
+        r0 + (1.0 - r0) * (1.0 - cos).powi(5)
+    }
 }
 
 impl Material for Dielectric {
     fn scatter(&self, ray: &Ray, hit: &Hit) -> Option<Scatter> {
         let attenuation = Color::WHITE;
-        let refraction_ratio = if hit.front_face() {
+        let refraction_index = if hit.front_face() {
             1.0 / self.refraction_index
         } else {
             self.refraction_index
         };
 
-        let refracted = Vec3::refract(ray.direction(), hit.normal(), refraction_ratio);
+        let unit_dir = ray.direction().normalized();
+        let cos = f64::min((-unit_dir).dot(hit.normal()), 1.0);
+        let sin = (1.0 - cos * cos).sqrt();
+
+        let should_reflect = refraction_index * sin > 1.0;
+        let scattered =
+            if should_reflect || Self::reflectance(cos, refraction_index) > rand::random::<f64>() {
+                Vec3::reflect(unit_dir, hit.normal())
+            } else {
+                Vec3::refract(unit_dir, hit.normal(), refraction_index)
+            };
 
         Some(Scatter {
-            ray: Ray::new(hit.point(), refracted),
+            ray: Ray::new(hit.point(), scattered),
             attenuation,
         })
     }
